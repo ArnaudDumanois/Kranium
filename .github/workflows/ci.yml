@@ -51,10 +51,4 @@ jobs:
         run: cargo install cargo-tarpaulin
 
       - name: Run coverage
-        run: cargo tarpaulin --verbose --out Xml
-
-      - name: Upload coverage to Codecov (optional)
-        uses: codecov/codecov-action@v4
-        with:
-          files: cobertura.xml
-          fail_ci_if_error: true
+        run: cargo tarpaulin
