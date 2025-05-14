@@ -65,7 +65,7 @@ impl<T: Numeric> Backend<T> for CpuBackend
         let n = b_shape[1];
 
         let result: Vec<T> = (0..m * n)
-            .into_par_iter() // Utilisation de rayon pour paralléliser
+            .into_par_iter() 
             .map(|index| {
                 let i = index / n;
                 let j = index % n;
