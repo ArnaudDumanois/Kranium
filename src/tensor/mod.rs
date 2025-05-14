@@ -1,5 +1,5 @@
 mod tensor;
-mod backend;
+pub mod backend;
 
 pub use tensor::*;
 pub use backend::traits::Backend;
