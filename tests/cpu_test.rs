@@ -65,20 +65,10 @@ fn test_div() {
 fn test_matmul() {
     let backend = CpuBackend;
     // Matrix A: 2x3
-    let a = vec![
-        1.0, 2.0, 3.0,
-        4.0, 5.0, 6.0
-    ];
+    let a = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
     // Matrix B: 3x2
-    let b = vec![
-        7.0, 8.0,
-        9.0, 10.0,
-        11.0, 12.0
-    ];
+    let b = vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0];
     let result = backend.matmul(&a, &[2, 3], &b, &[3, 2]);
-    let expected = vec![
-        58.0, 64.0,
-        139.0, 154.0
-    ];
+    let expected = vec![58.0, 64.0, 139.0, 154.0];
     assert_eq!(result, expected);
 }

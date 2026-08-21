@@ -1,5 +1,8 @@
-mod tensor;
 pub mod backend;
+mod core;
+mod error;
+mod ops;
 
-pub use tensor::*;
-pub use backend::traits::Backend;
+pub use backend::traits::{Backend, Numeric};
+pub use core::Tensor;
+pub use error::{TensorError, TensorResult};
