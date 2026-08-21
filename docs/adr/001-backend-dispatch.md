@@ -24,36 +24,13 @@ Contrepartie assumée : l'ensemble des backends adressables par `Device` est fer
 au crate. `Backend` reste implémentable librement à l'extérieur, `Device` n'est
 qu'un aiguilleur pour les backends fournis.
 
-## Limite connue : les données vivent en mémoire hôte
+## Limite connue : levée depuis
 
-Le trait manipule des `&[T]` et retourne des `Vec<T>` :
+Ce trait manipulait des `&[T]` et retournait des `Vec<T>`, ce qui rendait tout
+backend GPU réel contre-productif : un transfert hôte ↔ device par opération.
 
-```rust
-fn add(&self, a: &[T], b: &[T]) -> Vec<T>;
-```
-
-Un backend GPU réel devrait donc copier hôte → device, calculer, puis recopier
-device → hôte **à chaque opération**. Le transfert dominerait le calcul et un tel
-backend serait plus lent que le CPU sur tout sauf des matmul très grandes.
-
-Rendre le GPU rentable suppose que le tenseur possède un buffer résident sur le
-device, donc un type associé :
-
-```rust
-trait Backend<T> {
-    type Storage;
-    fn to_device(&self, data: &[T]) -> Self::Storage;
-    fn to_host(&self, storage: &Self::Storage) -> Vec<T>;
-    fn add(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage;
-}
-```
-
-Ce changement touche `Tensor` en entier (`data: Vec<T>` → `storage: B::Storage`),
-et donc `data()`, `get`/`set`, `Index`, `Display`, `PartialEq`.
-
-Il a été délibérément reporté hors de #7 pour garder la PR reviewable, mais son
-coût croît avec chaque module bâti sur l'API actuelle. Il doit être traité **avant**
-l'autograd (#9).
+Cette limite a été levée par l'issue #13 : `Backend` porte désormais un type
+associé `Storage`. Voir [002 — Stockage résident sur le device](./002-device-storage.md).
 
 ## Conséquences
 
@@ -63,3 +40,5 @@ l'autograd (#9).
   `cuda` sont des features vides, pour ne pas alourdir la compilation en CI.
 - `CpuBackend` n'est jamais compilé hors du binaire : la feature `cpu` ne contrôle
   que l'accélération rayon, pas l'existence du backend, puisque tout repli en dépend.
+- Le choix de l'enum plutôt que de `dyn Backend` s'est confirmé : un trait object
+  aurait dû rester object-safe, ce qui aurait interdit le type associé `Storage`.

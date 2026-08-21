@@ -4,12 +4,18 @@ use std::ops::{Index, IndexMut};
 use super::backend::traits::{Backend, Numeric};
 use super::error::{TensorError, TensorResult};
 
-/// A generic n-dimensional tensor, stored contiguously in row-major order.
+/// A generic n-dimensional tensor, laid out contiguously in row-major order.
+///
+/// The elements live wherever the backend puts them, which is not necessarily
+/// host memory: reaching them from the host always goes through
+/// [`Tensor::to_host`]. Backends that do store their elements in host memory
+/// additionally expose the borrowing accessors ([`Tensor::data`],
+/// [`Tensor::get`], indexing), which cannot exist for a device buffer.
 ///
 /// Every fallible operation comes in two flavours: a `try_*` variant returning
 /// a [`TensorError`], and a panicking wrapper for ergonomic use.
 pub struct Tensor<T: Numeric, B: Backend<T> + Clone> {
-    data: Vec<T>,
+    storage: B::Storage,
     shape: Vec<usize>,
     strides: Vec<usize>,
     backend: B,
@@ -23,8 +29,8 @@ impl<T: Numeric, B: Backend<T> + Clone> Tensor<T, B> {
 
     pub fn try_new(shape: &[usize], backend: B) -> TensorResult<Self> {
         validate_shape(shape)?;
-        let data = backend.allocate(shape);
-        Ok(Self::from_parts(data, shape, backend))
+        let storage = backend.allocate(shape);
+        Ok(Self::from_parts(storage, shape, backend))
     }
 
     pub fn zeros(shape: &[usize], backend: B) -> Self {
@@ -33,8 +39,8 @@ impl<T: Numeric, B: Backend<T> + Clone> Tensor<T, B> {
 
     pub fn try_zeros(shape: &[usize], backend: B) -> TensorResult<Self> {
         validate_shape(shape)?;
-        let data = backend.zeros(shape);
-        Ok(Self::from_parts(data, shape, backend))
+        let storage = backend.zeros(shape);
+        Ok(Self::from_parts(storage, shape, backend))
     }
 
     pub fn ones(shape: &[usize], backend: B) -> Self {
@@ -43,11 +49,11 @@ impl<T: Numeric, B: Backend<T> + Clone> Tensor<T, B> {
 
     pub fn try_ones(shape: &[usize], backend: B) -> TensorResult<Self> {
         validate_shape(shape)?;
-        let data = backend.ones(shape);
-        Ok(Self::from_parts(data, shape, backend))
+        let storage = backend.ones(shape);
+        Ok(Self::from_parts(storage, shape, backend))
     }
 
-    /// Take ownership of an existing buffer laid out as `shape`.
+    /// Upload host data to the backend and wrap it as a tensor of `shape`.
     pub fn from_data(data: Vec<T>, shape: &[usize], backend: B) -> Self {
         Self::try_from_data(data, shape, backend).unwrap_or_else(|e| panic!("{e}"))
     }
@@ -61,16 +67,29 @@ impl<T: Numeric, B: Backend<T> + Clone> Tensor<T, B> {
                 expected,
             });
         }
-        Ok(Self::from_parts(data, shape, backend))
+        let storage = backend.to_device(&data);
+        Ok(Self::from_parts(storage, shape, backend))
     }
 
-    pub(super) fn from_parts(data: Vec<T>, shape: &[usize], backend: B) -> Self {
+    pub(super) fn from_parts(storage: B::Storage, shape: &[usize], backend: B) -> Self {
         Self {
-            data,
+            storage,
             shape: shape.to_vec(),
             strides: compute_strides(shape),
             backend,
         }
+    }
+
+    /// Download the elements into host memory.
+    ///
+    /// This is a copy, and a device transfer for backends that do not compute
+    /// on the host.
+    pub fn to_host(&self) -> Vec<T> {
+        self.backend.to_host(&self.storage)
+    }
+
+    pub(super) fn storage(&self) -> &B::Storage {
+        &self.storage
     }
 
     pub fn shape(&self) -> &[usize] {
@@ -81,21 +100,14 @@ impl<T: Numeric, B: Backend<T> + Clone> Tensor<T, B> {
         &self.strides
     }
 
-    /// Total number of elements held by the tensor.
+    /// Total number of elements, derived from the shape rather than from the
+    /// storage, so that it never triggers a device transfer.
     pub fn size(&self) -> usize {
-        self.data.len()
+        self.shape.iter().product()
     }
 
     pub fn ndim(&self) -> usize {
         self.shape.len()
-    }
-
-    pub fn data(&self) -> &[T] {
-        &self.data
-    }
-
-    pub fn data_mut(&mut self) -> &mut [T] {
-        &mut self.data
     }
 
     pub fn backend(&self) -> &B {
@@ -118,7 +130,7 @@ impl<T: Numeric, B: Backend<T> + Clone> Tensor<T, B> {
             });
         }
         Ok(Self::from_parts(
-            self.data.clone(),
+            self.storage.clone(),
             new_shape,
             self.backend.clone(),
         ))
@@ -147,13 +159,28 @@ impl<T: Numeric, B: Backend<T> + Clone> Tensor<T, B> {
 
         Ok(flat)
     }
+}
+
+/// Accessors that borrow the elements in place.
+///
+/// They only exist for backends whose storage *is* host memory: a device buffer
+/// cannot hand out a `&[T]` without a transfer, so those backends expose
+/// [`Tensor::to_host`] instead.
+impl<T: Numeric, B: Backend<T, Storage = Vec<T>> + Clone> Tensor<T, B> {
+    pub fn data(&self) -> &[T] {
+        &self.storage
+    }
+
+    pub fn data_mut(&mut self) -> &mut [T] {
+        &mut self.storage
+    }
 
     pub fn get(&self, indices: &[usize]) -> T {
         self.try_get(indices).unwrap_or_else(|e| panic!("{e}"))
     }
 
     pub fn try_get(&self, indices: &[usize]) -> TensorResult<T> {
-        Ok(self.data[self.try_flat_index(indices)?])
+        Ok(self.storage[self.try_flat_index(indices)?])
     }
 
     pub fn set(&mut self, indices: &[usize], value: T) {
@@ -163,7 +190,7 @@ impl<T: Numeric, B: Backend<T> + Clone> Tensor<T, B> {
 
     pub fn try_set(&mut self, indices: &[usize], value: T) -> TensorResult<()> {
         let flat = self.try_flat_index(indices)?;
-        self.data[flat] = value;
+        self.storage[flat] = value;
         Ok(())
     }
 }
@@ -186,30 +213,30 @@ fn compute_strides(shape: &[usize]) -> Vec<usize> {
     strides
 }
 
-impl<T: Numeric, B: Backend<T> + Clone> Index<&[usize]> for Tensor<T, B> {
+impl<T: Numeric, B: Backend<T, Storage = Vec<T>> + Clone> Index<&[usize]> for Tensor<T, B> {
     type Output = T;
 
     fn index(&self, indices: &[usize]) -> &Self::Output {
         let flat = self
             .try_flat_index(indices)
             .unwrap_or_else(|e| panic!("{e}"));
-        &self.data[flat]
+        &self.storage[flat]
     }
 }
 
-impl<T: Numeric, B: Backend<T> + Clone> IndexMut<&[usize]> for Tensor<T, B> {
+impl<T: Numeric, B: Backend<T, Storage = Vec<T>> + Clone> IndexMut<&[usize]> for Tensor<T, B> {
     fn index_mut(&mut self, indices: &[usize]) -> &mut Self::Output {
         let flat = self
             .try_flat_index(indices)
             .unwrap_or_else(|e| panic!("{e}"));
-        &mut self.data[flat]
+        &mut self.storage[flat]
     }
 }
 
 impl<T: Numeric, B: Backend<T> + Clone> Clone for Tensor<T, B> {
     fn clone(&self) -> Self {
         Self {
-            data: self.data.clone(),
+            storage: self.storage.clone(),
             shape: self.shape.clone(),
             strides: self.strides.clone(),
             backend: self.backend.clone(),
@@ -217,9 +244,9 @@ impl<T: Numeric, B: Backend<T> + Clone> Clone for Tensor<T, B> {
     }
 }
 
-impl<T: Numeric + PartialEq, B: Backend<T> + Clone> PartialEq for Tensor<T, B> {
+impl<T: Numeric + PartialEq, B: Backend<T, Storage = Vec<T>> + Clone> PartialEq for Tensor<T, B> {
     fn eq(&self, other: &Self) -> bool {
-        self.shape == other.shape && self.data == other.data
+        self.shape == other.shape && self.storage == other.storage
     }
 }
 
@@ -228,7 +255,7 @@ impl<T: Numeric, B: Backend<T> + Clone> Debug for Tensor<T, B> {
         f.debug_struct("Tensor")
             .field("shape", &self.shape)
             .field("strides", &self.strides)
-            .field("data", &self.data)
+            .field("storage", &self.storage)
             .finish()
     }
 }
@@ -236,7 +263,7 @@ impl<T: Numeric, B: Backend<T> + Clone> Debug for Tensor<T, B> {
 impl<T: Numeric + Display, B: Backend<T> + Clone> Display for Tensor<T, B> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "Tensor(shape={:?}, data=[", self.shape)?;
-        for (i, value) in self.data.iter().enumerate() {
+        for (i, value) in self.to_host().iter().enumerate() {
             if i > 0 {
                 write!(f, ", ")?;
             }

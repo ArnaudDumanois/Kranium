@@ -93,35 +93,54 @@ macro_rules! dispatch {
 }
 
 impl<T: Numeric> Backend<T> for Device {
-    fn allocate(&self, shape: &[usize]) -> Vec<T> {
+    /// Every backend reachable through `Device` currently stores its elements in
+    /// host memory. Once a GPU backend owns device buffers, this becomes an enum
+    /// over the storages of the dispatched backends.
+    type Storage = Vec<T>;
+
+    fn to_device(&self, data: &[T]) -> Self::Storage {
+        dispatch!(self, to_device, data)
+    }
+
+    fn to_host(&self, storage: &Self::Storage) -> Vec<T> {
+        dispatch!(self, to_host, storage)
+    }
+
+    fn allocate(&self, shape: &[usize]) -> Self::Storage {
         dispatch!(self, allocate, shape)
     }
 
-    fn zeros(&self, shape: &[usize]) -> Vec<T> {
+    fn zeros(&self, shape: &[usize]) -> Self::Storage {
         dispatch!(self, zeros, shape)
     }
 
-    fn ones(&self, shape: &[usize]) -> Vec<T> {
+    fn ones(&self, shape: &[usize]) -> Self::Storage {
         dispatch!(self, ones, shape)
     }
 
-    fn add(&self, a: &[T], b: &[T]) -> Vec<T> {
+    fn add(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage {
         dispatch!(self, add, a, b)
     }
 
-    fn sub(&self, a: &[T], b: &[T]) -> Vec<T> {
+    fn sub(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage {
         dispatch!(self, sub, a, b)
     }
 
-    fn mul(&self, a: &[T], b: &[T]) -> Vec<T> {
+    fn mul(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage {
         dispatch!(self, mul, a, b)
     }
 
-    fn div(&self, a: &[T], b: &[T]) -> Vec<T> {
+    fn div(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage {
         dispatch!(self, div, a, b)
     }
 
-    fn matmul(&self, a: &[T], a_shape: &[usize], b: &[T], b_shape: &[usize]) -> Vec<T> {
+    fn matmul(
+        &self,
+        a: &Self::Storage,
+        a_shape: &[usize],
+        b: &Self::Storage,
+        b_shape: &[usize],
+    ) -> Self::Storage {
         dispatch!(self, matmul, a, a_shape, b, b_shape)
     }
 }

@@ -7,8 +7,8 @@ use std::fmt::Debug;
 /// assume its inputs are already valid, and must uphold the following contract:
 ///
 /// - buffers are contiguous and laid out in row-major order;
-/// - element-wise operations receive slices of equal length and return a buffer
-///   of that same length;
+/// - element-wise operations receive buffers of equal length and return a
+///   buffer of that same length;
 /// - `matmul` receives two rank-2 shapes with matching inner dimensions and
 ///   returns `a_shape[0] * b_shape[1]` elements;
 /// - `allocate`, `zeros` and `ones` return `shape.iter().product()` elements.
@@ -16,29 +16,49 @@ use std::fmt::Debug;
 /// Implementations keep their own assertions as a safety net for direct use of
 /// the backend, outside of [`Tensor`](crate::tensor::Tensor).
 pub trait Backend<T: Clone + Debug> {
-    /// Allocate memory for a tensor of the given shape.
-    fn allocate(&self, shape: &[usize]) -> Vec<T>;
+    /// Where a tensor's elements actually live for this backend.
+    ///
+    /// A CPU backend stores them in host memory (`Vec<T>`); an accelerator
+    /// stores them in device memory and never hands out a host slice. Tensors
+    /// are therefore opaque over their storage, and reaching the elements from
+    /// the host always goes through [`Backend::to_host`].
+    type Storage: Clone + Debug;
 
-    /// Initialize the tensor with zeros.
-    fn zeros(&self, shape: &[usize]) -> Vec<T>;
+    /// Upload host data to the backend.
+    fn to_device(&self, data: &[T]) -> Self::Storage;
 
-    /// Initialize the tensor with ones
-    fn ones(&self, shape: &[usize]) -> Vec<T>;
+    /// Download backend data back to host memory.
+    fn to_host(&self, storage: &Self::Storage) -> Vec<T>;
 
-    /// Add two tensors element-wise
-    fn add(&self, a: &[T], b: &[T]) -> Vec<T>;
+    /// Allocate uninitialized storage for a tensor of the given shape.
+    fn allocate(&self, shape: &[usize]) -> Self::Storage;
 
-    /// Subtract two tensors element-wise
-    fn sub(&self, a: &[T], b: &[T]) -> Vec<T>;
+    /// Allocate storage filled with zeros.
+    fn zeros(&self, shape: &[usize]) -> Self::Storage;
 
-    /// Multiply two tensors element-wise
-    fn mul(&self, a: &[T], b: &[T]) -> Vec<T>;
+    /// Allocate storage filled with ones.
+    fn ones(&self, shape: &[usize]) -> Self::Storage;
 
-    /// Divide two tensors element-wise
-    fn div(&self, a: &[T], b: &[T]) -> Vec<T>;
+    /// Add two buffers element-wise.
+    fn add(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage;
 
-    /// Matrix multiplication of two tensors
-    fn matmul(&self, a: &[T], a_shape: &[usize], b: &[T], b_shape: &[usize]) -> Vec<T>;
+    /// Subtract two buffers element-wise.
+    fn sub(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage;
+
+    /// Multiply two buffers element-wise.
+    fn mul(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage;
+
+    /// Divide two buffers element-wise.
+    fn div(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage;
+
+    /// Multiply two rank-2 buffers.
+    fn matmul(
+        &self,
+        a: &Self::Storage,
+        a_shape: &[usize],
+        b: &Self::Storage,
+        b_shape: &[usize],
+    ) -> Self::Storage;
 }
 
 pub trait Numeric:
