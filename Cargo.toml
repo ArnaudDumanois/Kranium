@@ -3,5 +3,19 @@ name = "kranium"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["cpu"]
+
+# Rayon-accelerated CPU backend. Disabling it keeps `CpuBackend` available as a
+# sequential fallback: the CPU backend is never compiled out, since every other
+# backend falls back to it.
+cpu = ["dep:rayon"]
+
+# GPU backends. Both are skeletons for now: they compile and dispatch, but no
+# kernel is implemented, so `is_available` reports false and `Device::preferred`
+# falls back to the CPU.
+wgpu = []
+cuda = []
+
 [dependencies]
-rayon = "1.7"
+rayon = { version = "1.7", optional = true }

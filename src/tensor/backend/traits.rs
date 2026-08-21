@@ -1,5 +1,20 @@
 use std::fmt::Debug;
 
+/// The single extension point for compute backends.
+///
+/// Implementors are the only place where the actual arithmetic happens; the
+/// tensor layer owns shapes, strides and validation. A backend may therefore
+/// assume its inputs are already valid, and must uphold the following contract:
+///
+/// - buffers are contiguous and laid out in row-major order;
+/// - element-wise operations receive slices of equal length and return a buffer
+///   of that same length;
+/// - `matmul` receives two rank-2 shapes with matching inner dimensions and
+///   returns `a_shape[0] * b_shape[1]` elements;
+/// - `allocate`, `zeros` and `ones` return `shape.iter().product()` elements.
+///
+/// Implementations keep their own assertions as a safety net for direct use of
+/// the backend, outside of [`Tensor`](crate::tensor::Tensor).
 pub trait Backend<T: Clone + Debug> {
     /// Allocate memory for a tensor of the given shape.
     fn allocate(&self, shape: &[usize]) -> Vec<T>;

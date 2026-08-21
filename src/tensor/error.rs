@@ -42,6 +42,9 @@ pub enum TensorError {
 
     /// The inner dimensions of a matrix multiplication do not line up.
     MatmulInnerMismatch { lhs_cols: usize, rhs_rows: usize },
+
+    /// A backend was requested but is not compiled in, or no device was found.
+    BackendUnavailable { requested: &'static str },
 }
 
 impl Display for TensorError {
@@ -82,6 +85,9 @@ impl Display for TensorError {
                 f,
                 "inner dimensions must match for matrix multiplication: {lhs_cols} vs {rhs_rows}"
             ),
+            Self::BackendUnavailable { requested } => {
+                write!(f, "the {requested} backend is not available on this build")
+            }
         }
     }
 }
