@@ -1,4 +1,5 @@
 use super::traits::{Backend, Numeric};
+#[cfg(feature = "cpu")]
 use rayon::prelude::*;
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct CpuBackend;
@@ -59,37 +60,35 @@ impl<T: Numeric> Backend<T> for CpuBackend {
         assert_eq!(
             a_shape.len(),
             2,
-            "First tensor must be 2D for matrix multiplication"
+            "first tensor must be 2D for matrix multiplication"
         );
         assert_eq!(
             b_shape.len(),
             2,
-            "Second tensor must be 2D for matrix multiplication"
+            "second tensor must be 2D for matrix multiplication"
         );
         assert_eq!(
             a_shape[1], b_shape[0],
-            "Inner dimensions must match for matrix multiplication"
+            "inner dimensions must match for matrix multiplication"
         );
 
-        let m = a_shape[0];
-        let k = a_shape[1];
-        let n = b_shape[1];
+        let (m, k, n) = (a_shape[0], a_shape[1], b_shape[1]);
+        let cell = |index: usize| {
+            let (i, j) = (index / n, index % n);
+            let mut sum = T::default();
+            for l in 0..k {
+                sum += a[i * k + l] * b[l * n + j];
+            }
+            sum
+        };
 
-        let result: Vec<T> = (0..m * n)
-            .into_par_iter()
-            .map(|index| {
-                let i = index / n;
-                let j = index % n;
-                let mut sum = T::default();
-                for l in 0..k {
-                    let a_idx = i * k + l;
-                    let b_idx = l * n + j;
-                    sum += a[a_idx] * b[b_idx];
-                }
-                sum
-            })
-            .collect();
-
-        result
+        #[cfg(feature = "cpu")]
+        {
+            (0..m * n).into_par_iter().map(cell).collect()
+        }
+        #[cfg(not(feature = "cpu"))]
+        {
+            (0..m * n).map(cell).collect()
+        }
     }
 }

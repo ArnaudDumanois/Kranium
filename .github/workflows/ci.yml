@@ -27,13 +27,24 @@ jobs:
         run: cargo fmt -- --check
 
       - name: Lint check (clippy)
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Build
         run: cargo build --verbose
 
       - name: Run tests
         run: cargo test --verbose
+
+      # Le code derriere un feature flag n'est compile par aucune des etapes
+      # ci-dessus : on couvre explicitement les combinaisons.
+      - name: Build without default features (sequential CPU fallback)
+        run: cargo build --no-default-features --verbose
+
+      - name: Test without default features
+        run: cargo test --no-default-features --verbose
+
+      - name: Test with all features (GPU skeletons)
+        run: cargo test --all-features --verbose
 
   coverage:
     name: Test coverage
@@ -51,4 +62,4 @@ jobs:
         run: cargo install cargo-tarpaulin
 
       - name: Run coverage
-        run: cargo tarpaulin
+        run: cargo tarpaulin --fail-under 80
