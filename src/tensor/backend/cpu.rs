@@ -23,56 +23,36 @@ impl<T: Numeric> Backend<T> for CpuBackend {
         assert_eq!(
             a.len(),
             b.len(),
-            "Tensors must have the same length for addition"
+            "tensors must have the same length for addition"
         );
-        let mut result = vec![T::default(); a.len()];
-        result
-            .iter_mut()
-            .zip(a.iter().zip(b.iter()))
-            .for_each(|(res, (&a_val, &b_val))| *res = a_val + b_val);
-        result
+        a.iter().zip(b.iter()).map(|(&a, &b)| a + b).collect()
     }
 
     fn sub(&self, a: &[T], b: &[T]) -> Vec<T> {
         assert_eq!(
             a.len(),
             b.len(),
-            "Tensors must have the same length for subtraction"
+            "tensors must have the same length for subtraction"
         );
-        let mut result = vec![T::default(); a.len()];
-        result
-            .iter_mut()
-            .zip(a.iter().zip(b.iter()))
-            .for_each(|(res, (&a_val, &b_val))| *res = a_val - b_val);
-        result
+        a.iter().zip(b.iter()).map(|(&a, &b)| a - b).collect()
     }
 
     fn mul(&self, a: &[T], b: &[T]) -> Vec<T> {
         assert_eq!(
             a.len(),
             b.len(),
-            "Tensors must have the same length for multiplication"
+            "tensors must have the same length for multiplication"
         );
-        let mut result = vec![T::default(); a.len()];
-        result
-            .iter_mut()
-            .zip(a.iter().zip(b.iter()))
-            .for_each(|(res, (&a_val, &b_val))| *res = a_val * b_val);
-        result
+        a.iter().zip(b.iter()).map(|(&a, &b)| a * b).collect()
     }
 
     fn div(&self, a: &[T], b: &[T]) -> Vec<T> {
         assert_eq!(
             a.len(),
             b.len(),
-            "Tensors must have the same length for division"
+            "tensors must have the same length for division"
         );
-        let mut result = vec![T::default(); a.len()];
-        result
-            .iter_mut()
-            .zip(a.iter().zip(b.iter()))
-            .for_each(|(res, (&a_val, &b_val))| *res = a_val / b_val);
-        result
+        a.iter().zip(b.iter()).map(|(&a, &b)| a / b).collect()
     }
 
     fn matmul(&self, a: &[T], a_shape: &[usize], b: &[T], b_shape: &[usize]) -> Vec<T> {

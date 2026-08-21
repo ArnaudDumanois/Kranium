@@ -25,6 +25,23 @@ pub enum TensorError {
 
     /// The requested shape does not hold the same number of elements.
     ReshapeSizeMismatch { actual: usize, requested: usize },
+
+    /// Two operands of an element-wise operation have different shapes.
+    ShapeMismatch {
+        op: &'static str,
+        lhs: Vec<usize>,
+        rhs: Vec<usize>,
+    },
+
+    /// An operation was applied to a tensor of the wrong rank.
+    ExpectedRank {
+        op: &'static str,
+        expected: usize,
+        actual: usize,
+    },
+
+    /// The inner dimensions of a matrix multiplication do not line up.
+    MatmulInnerMismatch { lhs_cols: usize, rhs_rows: usize },
 }
 
 impl Display for TensorError {
@@ -49,6 +66,21 @@ impl Display for TensorError {
             Self::ReshapeSizeMismatch { actual, requested } => write!(
                 f,
                 "cannot reshape a tensor of {actual} elements into a shape of {requested} elements"
+            ),
+            Self::ShapeMismatch { op, lhs, rhs } => {
+                write!(f, "tensor shapes must match for {op}: {lhs:?} vs {rhs:?}")
+            }
+            Self::ExpectedRank {
+                op,
+                expected,
+                actual,
+            } => write!(
+                f,
+                "{op} expects a {expected}-dimensional tensor, got {actual} dimensions"
+            ),
+            Self::MatmulInnerMismatch { lhs_cols, rhs_rows } => write!(
+                f,
+                "inner dimensions must match for matrix multiplication: {lhs_cols} vs {rhs_rows}"
             ),
         }
     }

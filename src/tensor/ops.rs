@@ -2,79 +2,89 @@ use std::ops::{Add, Div, Mul, Sub};
 
 use super::backend::traits::{Backend, Numeric};
 use super::core::Tensor;
+use super::error::{TensorError, TensorResult};
 
 impl<T: Numeric, B: Backend<T> + Clone> Tensor<T, B> {
     pub fn add(&self, other: &Self) -> Self {
+        self.try_add(other).unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    pub fn try_add(&self, other: &Self) -> TensorResult<Self> {
         self.zip_with(other, "addition", |backend, a, b| backend.add(a, b))
     }
 
     pub fn sub(&self, other: &Self) -> Self {
+        self.try_sub(other).unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    pub fn try_sub(&self, other: &Self) -> TensorResult<Self> {
         self.zip_with(other, "subtraction", |backend, a, b| backend.sub(a, b))
     }
 
     pub fn mul(&self, other: &Self) -> Self {
+        self.try_mul(other).unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    pub fn try_mul(&self, other: &Self) -> TensorResult<Self> {
         self.zip_with(other, "multiplication", |backend, a, b| backend.mul(a, b))
     }
 
+    /// Element-wise division. Dividing integer tensors by zero panics, as it
+    /// does for the underlying primitive type.
     pub fn div(&self, other: &Self) -> Self {
+        self.try_div(other).unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    pub fn try_div(&self, other: &Self) -> TensorResult<Self> {
         self.zip_with(other, "division", |backend, a, b| backend.div(a, b))
     }
 
-    /// Apply a backend element-wise operation after checking shape compatibility.
-    fn zip_with<F>(&self, other: &Self, op: &str, f: F) -> Self
+    /// Apply a backend element-wise operation once both shapes are known to match.
+    fn zip_with<F>(&self, other: &Self, op: &'static str, f: F) -> TensorResult<Self>
     where
         F: Fn(&B, &[T], &[T]) -> Vec<T>,
     {
-        assert_eq!(
-            self.shape(),
-            other.shape(),
-            "tensor shapes must match for {op}: {:?} vs {:?}",
-            self.shape(),
-            other.shape()
-        );
+        if self.shape() != other.shape() {
+            return Err(TensorError::ShapeMismatch {
+                op,
+                lhs: self.shape().to_vec(),
+                rhs: other.shape().to_vec(),
+            });
+        }
 
         let data = f(self.backend(), self.data(), other.data());
-        Self::from_data(data, self.shape(), self.backend().clone())
+        Ok(Self::from_parts(data, self.shape(), self.backend().clone()))
     }
 
     /// Matrix multiplication of two 2-D tensors.
     pub fn matmul(&self, other: &Self) -> Self {
-        assert_eq!(
-            self.ndim(),
-            2,
-            "first tensor must be 2D for matrix multiplication, got {:?}",
-            self.shape()
-        );
-        assert_eq!(
-            other.ndim(),
-            2,
-            "second tensor must be 2D for matrix multiplication, got {:?}",
-            other.shape()
-        );
-        assert_eq!(
-            self.shape()[1],
-            other.shape()[0],
-            "inner dimensions must match for matrix multiplication: {} vs {}",
-            self.shape()[1],
-            other.shape()[0]
-        );
+        self.try_matmul(other).unwrap_or_else(|e| panic!("{e}"))
+    }
 
-        let result_shape = [self.shape()[0], other.shape()[1]];
+    pub fn try_matmul(&self, other: &Self) -> TensorResult<Self> {
+        self.expect_rank_2("matrix multiplication")?;
+        other.expect_rank_2("matrix multiplication")?;
+
+        let (lhs_cols, rhs_rows) = (self.shape()[1], other.shape()[0]);
+        if lhs_cols != rhs_rows {
+            return Err(TensorError::MatmulInnerMismatch { lhs_cols, rhs_rows });
+        }
+
+        let shape = [self.shape()[0], other.shape()[1]];
         let data = self
             .backend()
             .matmul(self.data(), self.shape(), other.data(), other.shape());
 
-        Self::from_data(data, &result_shape, self.backend().clone())
+        Ok(Self::from_parts(data, &shape, self.backend().clone()))
     }
 
     /// Transpose a 2-D tensor.
     pub fn transpose(&self) -> Self {
-        assert_eq!(
-            self.ndim(),
-            2,
-            "transpose is only implemented for 2D tensors, got shape {:?}",
-            self.shape()
-        );
+        self.try_transpose().unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    pub fn try_transpose(&self) -> TensorResult<Self> {
+        self.expect_rank_2("transpose")?;
 
         let (rows, cols) = (self.shape()[0], self.shape()[1]);
         let mut data = Vec::with_capacity(self.size());
@@ -84,7 +94,22 @@ impl<T: Numeric, B: Backend<T> + Clone> Tensor<T, B> {
             }
         }
 
-        Self::from_data(data, &[cols, rows], self.backend().clone())
+        Ok(Self::from_parts(
+            data,
+            &[cols, rows],
+            self.backend().clone(),
+        ))
+    }
+
+    fn expect_rank_2(&self, op: &'static str) -> TensorResult<()> {
+        if self.ndim() != 2 {
+            return Err(TensorError::ExpectedRank {
+                op,
+                expected: 2,
+                actual: self.ndim(),
+            });
+        }
+        Ok(())
     }
 }
 

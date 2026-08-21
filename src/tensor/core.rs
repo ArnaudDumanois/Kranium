@@ -64,7 +64,7 @@ impl<T: Numeric, B: Backend<T> + Clone> Tensor<T, B> {
         Ok(Self::from_parts(data, shape, backend))
     }
 
-    fn from_parts(data: Vec<T>, shape: &[usize], backend: B) -> Self {
+    pub(super) fn from_parts(data: Vec<T>, shape: &[usize], backend: B) -> Self {
         Self {
             data,
             shape: shape.to_vec(),
@@ -214,6 +214,12 @@ impl<T: Numeric, B: Backend<T> + Clone> Clone for Tensor<T, B> {
             strides: self.strides.clone(),
             backend: self.backend.clone(),
         }
+    }
+}
+
+impl<T: Numeric + PartialEq, B: Backend<T> + Clone> PartialEq for Tensor<T, B> {
+    fn eq(&self, other: &Self) -> bool {
+        self.shape == other.shape && self.data == other.data
     }
 }
 
