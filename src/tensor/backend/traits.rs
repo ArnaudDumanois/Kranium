@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+pub use crate::tensor::numeric::{Float, Numeric};
+
 /// The single extension point for compute backends.
 ///
 /// Implementors are the only place where the actual arithmetic happens; the
@@ -59,36 +61,4 @@ pub trait Backend<T: Clone + Debug> {
         b: &Self::Storage,
         b_shape: &[usize],
     ) -> Self::Storage;
-}
-
-pub trait Numeric:
-    Clone
-    + Copy
-    + Default
-    + From<u8>
-    + std::fmt::Debug
-    + Send
-    + Sync
-    + std::ops::Add<Output = Self>
-    + std::ops::AddAssign
-    + std::ops::Sub<Output = Self>
-    + std::ops::Mul<Output = Self>
-    + std::ops::Div<Output = Self>
-{
-}
-
-impl<T> Numeric for T where
-    T: Clone
-        + Copy
-        + Default
-        + From<u8>
-        + std::fmt::Debug
-        + Send
-        + Sync
-        + std::ops::Add<Output = T>
-        + std::ops::AddAssign
-        + std::ops::Sub<Output = T>
-        + std::ops::Mul<Output = T>
-        + std::ops::Div<Output = T>
-{
 }

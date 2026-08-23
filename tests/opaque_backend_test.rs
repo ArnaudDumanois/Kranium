@@ -40,7 +40,7 @@ impl<T: Numeric> Backend<T> for OpaqueBackend {
 
     fn ones(&self, shape: &[usize]) -> Self::Storage {
         OpaqueBuffer {
-            inner: vec![T::from(1u8); shape.iter().product()],
+            inner: vec![T::one(); shape.iter().product()],
         }
     }
 

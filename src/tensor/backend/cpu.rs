@@ -28,7 +28,7 @@ impl<T: Numeric> Backend<T> for CpuBackend {
     }
 
     fn ones(&self, shape: &[usize]) -> Self::Storage {
-        vec![T::from(1u8); shape.iter().product()]
+        vec![T::one(); shape.iter().product()]
     }
 
     fn add(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage {
