@@ -244,7 +244,7 @@ impl<T: Numeric, B: Backend<T> + Clone> Clone for Tensor<T, B> {
     }
 }
 
-impl<T: Numeric + PartialEq, B: Backend<T, Storage = Vec<T>> + Clone> PartialEq for Tensor<T, B> {
+impl<T: Numeric, B: Backend<T, Storage = Vec<T>> + Clone> PartialEq for Tensor<T, B> {
     fn eq(&self, other: &Self) -> bool {
         self.shape == other.shape && self.storage == other.storage
     }
