@@ -11,7 +11,7 @@ use super::traits::{Backend, Numeric};
 ///
 /// The [`Backend`] trait now carries a `Storage` associated type, so a real
 /// implementation can keep its buffers on the device instead of copying host to
-/// device and back on every operation — see `docs/adr/002-device-storage.md`.
+/// device and back on every operation — see the ADR 002 page of the wiki.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct GpuBackend;
 
