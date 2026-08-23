@@ -9,10 +9,9 @@ use super::traits::{Backend, Numeric};
 /// reports `false` so that [`Device::preferred`](crate::tensor::Device::preferred)
 /// keeps returning the CPU.
 ///
-/// Note that the [`Backend`] trait hands out `Vec<T>` living in host memory, so
-/// a real implementation would have to copy host to device and back on every
-/// single operation. Making the GPU worthwhile requires device-resident storage
-/// first — see `docs/adr/001-backend-dispatch.md`.
+/// The [`Backend`] trait now carries a `Storage` associated type, so a real
+/// implementation can keep its buffers on the device instead of copying host to
+/// device and back on every operation — see `docs/adr/002-device-storage.md`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct GpuBackend;
 
@@ -36,35 +35,54 @@ impl GpuBackend {
 }
 
 impl<T: Numeric> Backend<T> for GpuBackend {
-    fn allocate(&self, shape: &[usize]) -> Vec<T> {
+    /// Host memory for now: without kernels there is nothing to keep on a
+    /// device. A real implementation replaces this with a device buffer, which
+    /// is precisely what the associated type exists for.
+    type Storage = Vec<T>;
+
+    fn to_device(&self, data: &[T]) -> Self::Storage {
+        CpuBackend.to_device(data)
+    }
+
+    fn to_host(&self, storage: &Self::Storage) -> Vec<T> {
+        CpuBackend.to_host(storage)
+    }
+
+    fn allocate(&self, shape: &[usize]) -> Self::Storage {
         CpuBackend.allocate(shape)
     }
 
-    fn zeros(&self, shape: &[usize]) -> Vec<T> {
+    fn zeros(&self, shape: &[usize]) -> Self::Storage {
         CpuBackend.zeros(shape)
     }
 
-    fn ones(&self, shape: &[usize]) -> Vec<T> {
+    fn ones(&self, shape: &[usize]) -> Self::Storage {
         CpuBackend.ones(shape)
     }
 
-    fn add(&self, a: &[T], b: &[T]) -> Vec<T> {
+    fn add(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage {
         CpuBackend.add(a, b)
     }
 
-    fn sub(&self, a: &[T], b: &[T]) -> Vec<T> {
+    fn sub(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage {
         CpuBackend.sub(a, b)
     }
 
-    fn mul(&self, a: &[T], b: &[T]) -> Vec<T> {
+    fn mul(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage {
         CpuBackend.mul(a, b)
     }
 
-    fn div(&self, a: &[T], b: &[T]) -> Vec<T> {
+    fn div(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage {
         CpuBackend.div(a, b)
     }
 
-    fn matmul(&self, a: &[T], a_shape: &[usize], b: &[T], b_shape: &[usize]) -> Vec<T> {
+    fn matmul(
+        &self,
+        a: &Self::Storage,
+        a_shape: &[usize],
+        b: &Self::Storage,
+        b_shape: &[usize],
+    ) -> Self::Storage {
         CpuBackend.matmul(a, a_shape, b, b_shape)
     }
 }

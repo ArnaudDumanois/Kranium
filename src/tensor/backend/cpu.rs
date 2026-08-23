@@ -1,26 +1,37 @@
 use super::traits::{Backend, Numeric};
+
 #[cfg(feature = "cpu")]
 use rayon::prelude::*;
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct CpuBackend;
 
 impl<T: Numeric> Backend<T> for CpuBackend {
-    fn allocate(&self, shape: &[usize]) -> Vec<T> {
-        let size = shape.iter().product();
-        vec![T::default(); size]
+    /// The CPU computes directly on host memory, so uploads and downloads are
+    /// plain copies.
+    type Storage = Vec<T>;
+
+    fn to_device(&self, data: &[T]) -> Self::Storage {
+        data.to_vec()
     }
 
-    fn zeros(&self, shape: &[usize]) -> Vec<T> {
-        let size = shape.iter().product();
-        vec![T::default(); size]
+    fn to_host(&self, storage: &Self::Storage) -> Vec<T> {
+        storage.clone()
     }
 
-    fn ones(&self, shape: &[usize]) -> Vec<T> {
-        let size = shape.iter().product();
-        vec![T::from(1u8); size]
+    fn allocate(&self, shape: &[usize]) -> Self::Storage {
+        vec![T::default(); shape.iter().product()]
     }
 
-    fn add(&self, a: &[T], b: &[T]) -> Vec<T> {
+    fn zeros(&self, shape: &[usize]) -> Self::Storage {
+        vec![T::default(); shape.iter().product()]
+    }
+
+    fn ones(&self, shape: &[usize]) -> Self::Storage {
+        vec![T::from(1u8); shape.iter().product()]
+    }
+
+    fn add(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage {
         assert_eq!(
             a.len(),
             b.len(),
@@ -29,7 +40,7 @@ impl<T: Numeric> Backend<T> for CpuBackend {
         a.iter().zip(b.iter()).map(|(&a, &b)| a + b).collect()
     }
 
-    fn sub(&self, a: &[T], b: &[T]) -> Vec<T> {
+    fn sub(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage {
         assert_eq!(
             a.len(),
             b.len(),
@@ -38,7 +49,7 @@ impl<T: Numeric> Backend<T> for CpuBackend {
         a.iter().zip(b.iter()).map(|(&a, &b)| a - b).collect()
     }
 
-    fn mul(&self, a: &[T], b: &[T]) -> Vec<T> {
+    fn mul(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage {
         assert_eq!(
             a.len(),
             b.len(),
@@ -47,7 +58,7 @@ impl<T: Numeric> Backend<T> for CpuBackend {
         a.iter().zip(b.iter()).map(|(&a, &b)| a * b).collect()
     }
 
-    fn div(&self, a: &[T], b: &[T]) -> Vec<T> {
+    fn div(&self, a: &Self::Storage, b: &Self::Storage) -> Self::Storage {
         assert_eq!(
             a.len(),
             b.len(),
@@ -56,7 +67,13 @@ impl<T: Numeric> Backend<T> for CpuBackend {
         a.iter().zip(b.iter()).map(|(&a, &b)| a / b).collect()
     }
 
-    fn matmul(&self, a: &[T], a_shape: &[usize], b: &[T], b_shape: &[usize]) -> Vec<T> {
+    fn matmul(
+        &self,
+        a: &Self::Storage,
+        a_shape: &[usize],
+        b: &Self::Storage,
+        b_shape: &[usize],
+    ) -> Self::Storage {
         assert_eq!(
             a_shape.len(),
             2,

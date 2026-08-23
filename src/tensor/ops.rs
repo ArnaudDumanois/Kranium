@@ -42,7 +42,7 @@ impl<T: Numeric, B: Backend<T> + Clone> Tensor<T, B> {
     /// Apply a backend element-wise operation once both shapes are known to match.
     fn zip_with<F>(&self, other: &Self, op: &'static str, f: F) -> TensorResult<Self>
     where
-        F: Fn(&B, &[T], &[T]) -> Vec<T>,
+        F: Fn(&B, &B::Storage, &B::Storage) -> B::Storage,
     {
         if self.shape() != other.shape() {
             return Err(TensorError::ShapeMismatch {
@@ -52,8 +52,12 @@ impl<T: Numeric, B: Backend<T> + Clone> Tensor<T, B> {
             });
         }
 
-        let data = f(self.backend(), self.data(), other.data());
-        Ok(Self::from_parts(data, self.shape(), self.backend().clone()))
+        let storage = f(self.backend(), self.storage(), other.storage());
+        Ok(Self::from_parts(
+            storage,
+            self.shape(),
+            self.backend().clone(),
+        ))
     }
 
     /// Matrix multiplication of two 2-D tensors.
@@ -71,11 +75,11 @@ impl<T: Numeric, B: Backend<T> + Clone> Tensor<T, B> {
         }
 
         let shape = [self.shape()[0], other.shape()[1]];
-        let data = self
-            .backend()
-            .matmul(self.data(), self.shape(), other.data(), other.shape());
+        let storage =
+            self.backend()
+                .matmul(self.storage(), self.shape(), other.storage(), other.shape());
 
-        Ok(Self::from_parts(data, &shape, self.backend().clone()))
+        Ok(Self::from_parts(storage, &shape, self.backend().clone()))
     }
 
     /// Transpose a 2-D tensor.
@@ -86,16 +90,21 @@ impl<T: Numeric, B: Backend<T> + Clone> Tensor<T, B> {
     pub fn try_transpose(&self) -> TensorResult<Self> {
         self.expect_rank_2("transpose")?;
 
+        // La transposition n'a pas encore de primitive dans le backend : on
+        // rapatrie, on permute, puis on renvoie sur le device. C'est correct
+        // pour tout backend, et ce sera le premier candidat a une primitive
+        // dediee quand un vrai kernel GPU arrivera.
         let (rows, cols) = (self.shape()[0], self.shape()[1]);
+        let host = self.to_host();
         let mut data = Vec::with_capacity(self.size());
         for j in 0..cols {
             for i in 0..rows {
-                data.push(self.data()[i * cols + j]);
+                data.push(host[i * cols + j]);
             }
         }
 
         Ok(Self::from_parts(
-            data,
+            self.backend().to_device(&data),
             &[cols, rows],
             self.backend().clone(),
         ))

@@ -122,6 +122,14 @@ fn a_device_tensor_exposes_its_backend() {
     assert_eq!(t.backend().kind(), DeviceKind::Cpu);
 }
 
+#[test]
+fn to_host_matches_the_borrowed_data_for_a_host_backend() {
+    let device = Device::preferred();
+    let tensor = device_tensor(vec![1.0, 2.0, 3.0], &[3], device);
+    assert_eq!(tensor.to_host(), tensor.data().to_vec());
+    assert_eq!(tensor.add(&tensor).to_host(), vec![2.0, 4.0, 6.0]);
+}
+
 // --- Couverture des trous relevés par tarpaulin ------------------------------
 
 #[test]

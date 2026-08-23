@@ -76,23 +76,23 @@ fn test_matmul() {
 #[test]
 #[should_panic(expected = "same length for addition")]
 fn add_panics_on_length_mismatch() {
-    let _: Vec<f32> = CpuBackend.add(&[1.0, 2.0], &[1.0]);
+    let _: Vec<f32> = CpuBackend.add(&vec![1.0, 2.0], &vec![1.0]);
 }
 
 #[test]
 #[should_panic(expected = "same length for division")]
 fn div_panics_on_length_mismatch() {
-    let _: Vec<f32> = CpuBackend.div(&[1.0], &[1.0, 2.0]);
+    let _: Vec<f32> = CpuBackend.div(&vec![1.0], &vec![1.0, 2.0]);
 }
 
 #[test]
 #[should_panic(expected = "must be 2D")]
 fn matmul_panics_on_non_2d_operand() {
-    let _: Vec<f32> = CpuBackend.matmul(&[1.0, 2.0], &[2], &[1.0, 2.0], &[2, 1]);
+    let _: Vec<f32> = CpuBackend.matmul(&vec![1.0, 2.0], &[2], &vec![1.0, 2.0], &[2, 1]);
 }
 
 #[test]
 fn matmul_handles_a_single_cell() {
-    let result = CpuBackend.matmul(&[2.0], &[1, 1], &[3.0], &[1, 1]);
+    let result = CpuBackend.matmul(&vec![2.0], &[1, 1], &vec![3.0], &[1, 1]);
     assert_eq!(result, vec![6.0]);
 }
